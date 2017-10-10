@@ -9,6 +9,7 @@ using System.Windows.Forms;
  * Using:
  * Ctrl lets you move nodes
  * Shift lets you remove nodes
+ * Good luck!
  */
 namespace BezierCurves
 {
