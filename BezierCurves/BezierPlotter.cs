@@ -1,8 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 
+
+/*
+ * Using:
+ * Ctrl lets you move nodes
+ * Shift lets you remove nodes
+ */
 namespace BezierCurves
 {
     public class CPoint
@@ -12,99 +19,183 @@ namespace BezierCurves
         public float Y { get { return point.Y; } set { point.Y = value; } }
         public CPoint() { }
         public CPoint(PointF p) { point = p; }
+        public CPoint(float x, float y) { X = x; Y = y; }
         public static implicit operator CPoint(PointF p) { return new CPoint(p); }
         public static implicit operator PointF(CPoint p) { return p.point; }
+        public static implicit operator CPoint(Point p) { return new CPoint(p); }
+        public static CPoint operator *(CPoint a, float f) { return new CPoint(a.X * f, a.Y * f); }
+        public static CPoint operator *(float f, CPoint a) { return a * f; }
+        public static CPoint operator +(CPoint a, CPoint b) { return new CPoint(a.X + b.X, a.Y + b.Y); }
+        public static CPoint operator -(CPoint a, CPoint b) { return a + (-1) * b; }
     }
 
     public class BezierPlotter : UserControl
     {
-        private float POINT_SIZE = 4;
-        private float SELECTION_RADIUS = 12;
+        private int NUMBER_OF_STEPS = 20;
 
-        private List<CPoint> points = new List<CPoint>();
-        private CPoint selectedPoint;
+        protected List<CPoint> points = new List<CPoint>();
+        protected IState currentState;
+
+        /* Plotter can be in these states:
+         * 1. Initial
+         * 2. Moving node
+         */
+        protected interface IState
+        {
+            void OnMouseDown(MouseEventArgs e);
+            void OnMouseUp(MouseEventArgs e);
+            void OnMouseMove(MouseEventArgs e);
+        }
+
+        protected abstract class BaseState : IState
+        {
+            protected BezierPlotter plotter;
+
+            public BaseState(BezierPlotter plotter) { this.plotter = plotter; }
+
+            public virtual void OnMouseDown(MouseEventArgs e) { }
+            public virtual void OnMouseMove(MouseEventArgs e) { }
+            public virtual void OnMouseUp(MouseEventArgs e) { }
+        }
+
+        protected class InitialState : BaseState
+        {
+            private float SELECTION_RADIUS = 12;
+
+            public InitialState(BezierPlotter plotter) : base(plotter) { }
+
+            private int FindNearestPoint(CPoint c)
+            {
+                var minDistance = float.MaxValue;
+                var minIndex = -1;
+                for (int i = 0; i < plotter.points.Count; ++i)
+                {
+                    var p = plotter.points[i];
+                    var distance = Math.Abs(p.X - c.X) + Math.Abs(p.Y - c.Y);
+                    if (minDistance < distance) continue;
+                    minDistance = distance;
+                    minIndex = i;
+                }
+                return minIndex;
+            }
+
+            public override void OnMouseDown(MouseEventArgs e)
+            {
+                if (ModifierKeys.HasFlag(Keys.Control) || ModifierKeys.HasFlag(Keys.Shift))
+                {
+                    if (plotter.points.Count == 0) return;
+                    int nearestPointIndex = FindNearestPoint(e.Location);
+                    var nearestPoint = plotter.points[nearestPointIndex];
+                    if (SELECTION_RADIUS < Math.Abs(nearestPoint.X - e.X) ||
+                        SELECTION_RADIUS < Math.Abs(nearestPoint.Y - e.Y))
+                        return;
+                    if (ModifierKeys.HasFlag(Keys.Shift))
+                    {
+                        plotter.points.RemoveRange(nearestPointIndex / 3 * 3, 3);
+                        plotter.Invalidate();
+                    }
+                    else
+                        plotter.currentState = new MovingNodeState(plotter, nearestPointIndex);
+                }
+                else
+                {
+                    for (int i = 0; i < 3; ++i)
+                        plotter.points.Add(e.Location);
+                    plotter.currentState = new MovingNodeState(plotter, plotter.points.Count - 1);
+                }
+            }
+        }
+
+        protected class MovingNodeState : BaseState
+        {
+            private int nodeIndex;
+            private CPoint point;
+
+            public MovingNodeState(BezierPlotter plotter, int nodeIndex) : base(plotter)
+            {
+                this.nodeIndex = nodeIndex;
+                point = plotter.points[nodeIndex];
+            }
+
+            public override void OnMouseMove(MouseEventArgs e)
+            {
+                if (1 == nodeIndex % 3)
+                {
+                    var delta = e.Location - plotter.points[nodeIndex];
+                    plotter.points[nodeIndex - 1] += delta;
+                    plotter.points[nodeIndex    ] += delta;
+                    plotter.points[nodeIndex + 1] += delta;
+                }
+                else
+                {
+                    var oppositeArmIndex = 0 == nodeIndex % 3 ? nodeIndex + 2 : nodeIndex - 2;
+                    var delta = e.Location - plotter.points[nodeIndex];
+                    plotter.points[nodeIndex       ] += delta;
+                    plotter.points[oppositeArmIndex] -= delta;
+                }
+                plotter.Invalidate();
+            }
+
+            public override void OnMouseUp(MouseEventArgs e)
+            {
+                plotter.currentState = new InitialState(plotter);
+            }
+        }
 
         public BezierPlotter() : base()
         {
-            var flags = ControlStyles.AllPaintingInWmPaint | ControlStyles.DoubleBuffer | ControlStyles.UserPaint;
+            currentState = new InitialState(this);
+            var flags = ControlStyles.AllPaintingInWmPaint 
+                      | ControlStyles.DoubleBuffer 
+                      | ControlStyles.UserPaint;
             SetStyle(flags, true);
         }
 
-        protected override void OnMouseClick(MouseEventArgs e)
+        protected override void OnMouseDown(MouseEventArgs e)
         {
-            base.OnMouseClick(e);
-            if (0 != (ModifierKeys & Keys.Control)) return;
-            points.Add((PointF)e.Location);
-            Invalidate();
+            base.OnMouseDown(e);
+            currentState.OnMouseDown(e);
         }
 
-        private void MovePoint(PointF cursor)
+        protected override void OnMouseUp(MouseEventArgs e)
         {
-            if (null == selectedPoint) return;
-            PointF previousPosition = selectedPoint;
-            selectedPoint.X = cursor.X;
-            selectedPoint.Y = cursor.Y;
-            Invalidate();
-        }
-
-        private float ManhattanDistance(PointF a, PointF b)
-        {
-            float dx = b.X - a.X;
-            float dy = b.Y - a.Y;
-            return Math.Abs(dx) + Math.Abs(dy);
-        }
-
-        private float EuclideanDistance(PointF a, PointF b)
-        {
-            double dx = b.X - a.X;
-            double dy = b.Y - a.Y;
-            return (float)Math.Sqrt(dx * dx + dy * dy);
-        }
-
-        private void SelectPoint(PointF cursor)
-        {
-            if (0 == points.Count) return;
-            CPoint nearestPoint = points[0];
-            var nearestManhattan = ManhattanDistance(cursor, nearestPoint);
-            var nearestDistance = EuclideanDistance(cursor, nearestPoint);
-            for (int i = 1; i < points.Count; ++i)
-            {
-                var p = points[i];
-                var manhattan = ManhattanDistance(cursor, p);
-                if (nearestManhattan < manhattan) continue; // Fast check -- true for most of the points
-                var distance = EuclideanDistance(cursor, p);
-                if (nearestDistance < distance) continue; // Slow check -- true only for really good candidates
-                nearestPoint = p;
-                nearestManhattan = manhattan;
-                nearestDistance = distance;
-            }
-            var oldSelection = selectedPoint;
-            selectedPoint = nearestDistance < SELECTION_RADIUS ? nearestPoint : null;
-            if (oldSelection != selectedPoint)
-                Invalidate();
+            base.OnMouseUp(e);
+            currentState.OnMouseUp(e);
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
-            if (0 != (ModifierKeys & Keys.Control) && 0 != (e.Button & MouseButtons.Left))
-                MovePoint(e.Location);
-            else
-                SelectPoint(e.Location);
+            currentState.OnMouseMove(e);
         }
 
-        private PointF[] diamond = new PointF[4];
+        private Pen boldPen = new Pen(Color.Black, 4);
 
-        private PointF Bezier(int i, int j, float t)
+        private void DrawBezier4(Graphics g, CPoint p0, CPoint p1, CPoint p2, CPoint p3)
         {
-            if (i + 1 == j)
-                return points[i];
-            var a = Bezier(i, j - 1, t);
-            var b = Bezier(i + 1, j, t);
-            return new PointF(
-                (1 - t) * a.X + t * b.X,
-                (1 - t) * a.Y + t * b.Y
-            );
+            var prev = p0;
+            for (int i = 1; i < NUMBER_OF_STEPS; ++i)
+            {
+                var t = (float)i / (NUMBER_OF_STEPS - 1);
+                var q0 = p0 * (1 - t) + p1 * t;
+                var q1 = p1 * (1 - t) + p2 * t;
+                var q2 = p2 * (1 - t) + p3 * t;
+                var r0 = q0 * (1 - t) + q1 * t;
+                var r1 = q1 * (1 - t) + q2 * t;
+                var  b = r0 * (1 - t) + r1 * t;
+                g.DrawLine(boldPen, prev, b);
+                prev = b;
+            }
+        }
+
+        private void DrawDiamond(Graphics g, PointF p, float s)
+        {
+            PointF[] diamond = new PointF[4];
+            diamond[0] = new PointF(p.X, p.Y - s);
+            diamond[1] = new PointF(p.X + s, p.Y);
+            diamond[2] = new PointF(p.X, p.Y + s);
+            diamond[3] = new PointF(p.X - s, p.Y);
+            g.DrawPolygon(Pens.Black, diamond);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -112,27 +203,21 @@ namespace BezierCurves
             base.OnPaint(e);
             if (0 == points.Count) return;
             var g = e.Graphics;
-            var s = POINT_SIZE;
             g.Clear(Color.White);
-            for (int i = 0; i < points.Count - 1; ++i)
-                g.DrawLine(Pens.Black, points[i], points[i + 1]);
-            var prev = points[0];
-            for (int i = 1; i < 100; ++i)
+            for (int i = 0; i < points.Count / 3; ++i)
             {
-                var next = Bezier(0, points.Count, i / 100.0f);
-                g.DrawLine(Pens.Green, prev, next);
-                prev = next;
+                var l = points[3 * i];
+                var p = points[3 * i + 1];
+                var r = points[3 * i + 2];
+                DrawDiamond(g, l, 3);
+                DrawDiamond(g, p, 4);
+                DrawDiamond(g, r, 3);
+                g.DrawLine(Pens.Black, l, r);
             }
-            foreach (var p in points)
+            if (points.Count < 4) return;
+            for (int i = 1; i < points.Count - 3; i += 3)
             {
-                diamond[0] = new PointF(p.X, p.Y - s);
-                diamond[1] = new PointF(p.X + s, p.Y);
-                diamond[2] = new PointF(p.X, p.Y + s);
-                diamond[3] = new PointF(p.X - s, p.Y);
-                if (p == selectedPoint)
-                    g.FillPolygon(Brushes.Black, diamond);
-                else
-                    g.DrawPolygon(Pens.Black, diamond);
+                DrawBezier4(g, points[i], points[i + 1], points[i + 2], points[i + 3]);
             }
         }
     }
