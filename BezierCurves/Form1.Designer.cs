@@ -46,7 +46,7 @@
             this.ClientSize = new System.Drawing.Size(928, 586);
             this.Controls.Add(this.bezierPlotter1);
             this.Name = "Form1";
-            this.Text = "Form1";
+            this.Text = "Bezier splines";
             this.ResumeLayout(false);
 
         }

@@ -1,16 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 
-
-/*
- * Using:
- * Ctrl lets you move nodes
- * Shift lets you remove nodes
- * Good luck!
- */
 namespace BezierCurves
 {
     public class CPoint
@@ -30,13 +22,14 @@ namespace BezierCurves
         public static CPoint operator -(CPoint a, CPoint b) { return a + (-1) * b; }
     }
 
+    /*
+     * Using:
+     * Ctrl lets you move nodes
+     * Shift lets you remove nodes
+     * Good luck!
+     */
     public class BezierPlotter : UserControl
     {
-        private int NUMBER_OF_STEPS = 20;
-
-        protected List<CPoint> points = new List<CPoint>();
-        protected IState currentState;
-
         /* Plotter can be in these states:
          * 1. Initial
          * 2. Moving node
@@ -110,12 +103,10 @@ namespace BezierCurves
         protected class MovingNodeState : BaseState
         {
             private int nodeIndex;
-            private CPoint point;
 
             public MovingNodeState(BezierPlotter plotter, int nodeIndex) : base(plotter)
             {
                 this.nodeIndex = nodeIndex;
-                point = plotter.points[nodeIndex];
             }
 
             public override void OnMouseMove(MouseEventArgs e)
@@ -142,6 +133,11 @@ namespace BezierCurves
                 plotter.currentState = new InitialState(plotter);
             }
         }
+
+        private int NUMBER_OF_STEPS = 20;
+
+        protected List<CPoint> points = new List<CPoint>();
+        protected IState currentState;
 
         public BezierPlotter() : base()
         {
@@ -170,7 +166,7 @@ namespace BezierCurves
             currentState.OnMouseMove(e);
         }
 
-        private Pen boldPen = new Pen(Color.Black, 4);
+        private static Pen boldPen = new Pen(Color.Black, 2);
 
         private void DrawBezier4(Graphics g, CPoint p0, CPoint p1, CPoint p2, CPoint p3)
         {
@@ -196,6 +192,7 @@ namespace BezierCurves
             diamond[1] = new PointF(p.X + s, p.Y);
             diamond[2] = new PointF(p.X, p.Y + s);
             diamond[3] = new PointF(p.X - s, p.Y);
+            g.FillPolygon(Brushes.White, diamond);
             g.DrawPolygon(Pens.Black, diamond);
         }
 
@@ -205,20 +202,20 @@ namespace BezierCurves
             if (0 == points.Count) return;
             var g = e.Graphics;
             g.Clear(Color.White);
+            if (3 < points.Count)
+            {
+                for (int i = 1; i < points.Count - 3; i += 3)
+                    DrawBezier4(g, points[i], points[i + 1], points[i + 2], points[i + 3]);
+            }
             for (int i = 0; i < points.Count / 3; ++i)
             {
                 var l = points[3 * i];
                 var p = points[3 * i + 1];
                 var r = points[3 * i + 2];
+                g.DrawLine(Pens.Brown, l, r);
                 DrawDiamond(g, l, 3);
                 DrawDiamond(g, p, 4);
                 DrawDiamond(g, r, 3);
-                g.DrawLine(Pens.Black, l, r);
-            }
-            if (points.Count < 4) return;
-            for (int i = 1; i < points.Count - 3; i += 3)
-            {
-                DrawBezier4(g, points[i], points[i + 1], points[i + 2], points[i + 3]);
             }
         }
     }
