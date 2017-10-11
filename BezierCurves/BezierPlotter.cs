@@ -84,10 +84,7 @@ namespace BezierCurves
                         SELECTION_RADIUS < Math.Abs(nearestPoint.Y - e.Y))
                         return;
                     if (ModifierKeys.HasFlag(Keys.Shift))
-                    {
                         plotter.points.RemoveRange(nearestPointIndex / 3 * 3, 3);
-                        plotter.Invalidate();
-                    }
                     else
                         plotter.currentState = new MovingNodeState(plotter, nearestPointIndex);
                 }
@@ -97,6 +94,7 @@ namespace BezierCurves
                         plotter.points.Add(e.Location);
                     plotter.currentState = new MovingNodeState(plotter, plotter.points.Count - 1);
                 }
+                plotter.Invalidate();
             }
         }
 
@@ -203,10 +201,8 @@ namespace BezierCurves
             var g = e.Graphics;
             g.Clear(Color.White);
             if (3 < points.Count)
-            {
                 for (int i = 1; i < points.Count - 3; i += 3)
                     DrawBezier4(g, points[i], points[i + 1], points[i + 2], points[i + 3]);
-            }
             for (int i = 0; i < points.Count / 3; ++i)
             {
                 var l = points[3 * i];
