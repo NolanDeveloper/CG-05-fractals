@@ -22,18 +22,8 @@ namespace BezierCurves
         public static CPoint operator -(CPoint a, CPoint b) { return a + (-1) * b; }
     }
 
-    /*
-     * Using:
-     * Ctrl lets you move nodes
-     * Shift lets you remove nodes
-     * Good luck!
-     */
     public class BezierPlotter : UserControl
     {
-        /* Plotter can be in these states:
-         * 1. Initial
-         * 2. Moving node
-         */
         protected interface IState
         {
             void OnMouseDown(MouseEventArgs e);
