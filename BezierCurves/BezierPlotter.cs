@@ -189,7 +189,7 @@ namespace BezierCurves
             base.OnPaint(e);
             if (0 == points.Count) return;
             var g = e.Graphics;
-            g.Clear(Color.White);
+            g.Clear(SystemColors.Control);
             if (3 < points.Count)
                 for (int i = 1; i < points.Count - 3; i += 3)
                     DrawBezier4(g, points[i], points[i + 1], points[i + 2], points[i + 3]);
