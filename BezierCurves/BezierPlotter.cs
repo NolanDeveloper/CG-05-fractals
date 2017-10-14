@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using System.Windows.Input;
 
 namespace BezierCurves
 {
@@ -126,6 +127,7 @@ namespace BezierCurves
 
         protected List<CPoint> points = new List<CPoint>();
         protected IState currentState;
+        private bool showGuideLines = true;
 
         public BezierPlotter() : base()
         {
@@ -134,6 +136,14 @@ namespace BezierCurves
                       | ControlStyles.DoubleBuffer 
                       | ControlStyles.UserPaint;
             SetStyle(flags, true);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode != Keys.Space) return;
+            showGuideLines = !showGuideLines;
+            Invalidate();
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -198,10 +208,10 @@ namespace BezierCurves
                 var l = points[3 * i];
                 var p = points[3 * i + 1];
                 var r = points[3 * i + 2];
-                g.DrawLine(Pens.Brown, l, r);
-                DrawDiamond(g, l, 3);
+                if (showGuideLines) g.DrawLine(Pens.Brown, l, r);
+                if (showGuideLines) DrawDiamond(g, l, 3);
                 DrawDiamond(g, p, 4);
-                DrawDiamond(g, r, 3);
+                if (showGuideLines) DrawDiamond(g, r, 3);
             }
         }
     }
